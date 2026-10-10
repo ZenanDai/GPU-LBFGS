@@ -41,10 +41,10 @@ class BatchLBFGS:
 
     alpha: initial inverse Hessian 1/alpha; memory: number of stored (s, y) pairs;
     maxstep: largest row displacement per step; damping: factor applied to every step.
-    The defaults are those of ASE.
+    The defaults are those of ASE except alpha (10 here, 70 in ASE).
     """
 
-    def __init__(self, maxstep=0.2, memory=100, alpha=70.0, damping=1.0):
+    def __init__(self, maxstep=0.2, memory=100, alpha=10.0, damping=1.0):
         if not (maxstep > 0 and alpha > 0 and damping > 0) or memory < 1:
             raise ValueError("maxstep, alpha and damping must be positive and memory >= 1")
         self.maxstep, self.memory, self.h0, self.damping = maxstep, memory, 1.0 / alpha, damping

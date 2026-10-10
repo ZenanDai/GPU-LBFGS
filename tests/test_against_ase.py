@@ -33,20 +33,22 @@ def structures():
     return out
 
 
-def ase_reference(atoms, relax_cell):
+def ase_reference(atoms, relax_cell, alpha):
     atoms = atoms.copy()
     atoms.calc = EMT()
-    opt = LBFGS(FrechetCellFilter(atoms) if relax_cell else atoms, logfile=None)
+    opt = LBFGS(FrechetCellFilter(atoms) if relax_cell else atoms, alpha=alpha, logfile=None)
     opt.run(fmax=FMAX, steps=STEPS)
     return atoms, opt.nsteps
 
 
-def check_matches_ase_lbfgs(relax_cell):
+def check_matches_ase_lbfgs(relax_cell, alpha):
+    """alpha=None: gpu_lbfgs's default (10) against ASE with alpha=10; alpha=70: ASE's own defaults."""
     inputs = structures()
+    kwargs = {} if alpha is None else {"alpha": alpha}
     results = relax(inputs, ase_calculator_predict(EMT()), fmax=FMAX, steps=STEPS,
-                    relax_cell=relax_cell, device="cpu")
+                    relax_cell=relax_cell, device="cpu", **kwargs)
     for atoms, r in zip(inputs, results):
-        ref, nsteps = ase_reference(atoms, relax_cell)
+        ref, nsteps = ase_reference(atoms, relax_cell, 10.0 if alpha is None else alpha)
         assert r.error is None and r.converged
         assert r.steps == nsteps
         assert abs(r.energy - ref.get_potential_energy()) < 1e-8
@@ -57,11 +59,16 @@ def check_matches_ase_lbfgs(relax_cell):
 
 
 def test_matches_ase_lbfgs_cell():
-    check_matches_ase_lbfgs(True)
+    check_matches_ase_lbfgs(True, None)
 
 
 def test_matches_ase_lbfgs_positions_only():
-    check_matches_ase_lbfgs(False)
+    check_matches_ase_lbfgs(False, None)
+
+
+def test_matches_ase_defaults_with_alpha_70():
+    check_matches_ase_lbfgs(True, 70.0)
+    check_matches_ase_lbfgs(False, 70.0)
 
 
 def test_batching_does_not_change_results():

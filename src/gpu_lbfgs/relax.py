@@ -35,7 +35,7 @@ def _as_tensor(value, device):
 
 
 def relax(atoms_list, predict: Callable, *, fmax=0.05, steps=500, relax_cell=True, device=None,
-          batch_size=None, maxstep=0.2, memory=100, alpha=70.0, damping=1.0, callback=None):
+          batch_size=None, maxstep=0.2, memory=100, alpha=10.0, damping=1.0, callback=None):
     """Relax a list of ase.Atoms with L-BFGS, all structures of a batch at once.
 
     predict(atoms_list) -> dict with
@@ -48,7 +48,8 @@ def relax(atoms_list, predict: Callable, *, fmax=0.05, steps=500, relax_cell=Tru
     relax_cell=True relaxes positions and cell at zero pressure, like
     ase.optimize.LBFGS(ase.filters.FrechetCellFilter(atoms)); relax_cell=False relaxes positions
     only, like ase.optimize.LBFGS(atoms). fmax, steps, maxstep, memory, alpha and damping have the
-    meaning of the ASE arguments (steps = largest number of L-BFGS steps).
+    meaning of the ASE arguments (steps = largest number of L-BFGS steps). The default alpha is 10,
+    not ASE's 70 (larger first steps, usually fewer steps); pass alpha=70 to reproduce ASE's defaults.
     batch_size: structures per batch (default: all at once). callback(step, active, energies) is
     called after every model evaluation with the indices (into atoms_list) of the structures still
     being relaxed and their energies (eV).

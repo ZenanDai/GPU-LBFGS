@@ -4,10 +4,12 @@ Batched L-BFGS structure relaxation on the GPU. Many structures are relaxed at o
 step all unconverged structures go through the potential in one batched call, and the L-BFGS
 update is done for all of them together with PyTorch tensors.
 
-The optimizer reproduces `ase.optimize.LBFGS`, with the same default settings, either on
+The optimizer reproduces `ase.optimize.LBFGS` (no line search), either on
 `ase.filters.FrechetCellFilter` (positions and cell, zero pressure) or on the atoms alone
-(positions only). It works with any potential that can evaluate a list of structures. A wrapper
-for ORB models and one for any ASE calculator are included.
+(positions only). All settings default to ASE's values except `alpha`, which is 10 here instead of
+ASE's 70 (see [Choosing alpha](#choosing-alpha)); with `alpha=70` the results are identical to ASE's
+defaults. It works with any potential that can evaluate a list of structures. A wrapper for ORB
+models and one for any ASE calculator are included.
 
 ## Install
 
@@ -56,7 +58,7 @@ python examples/relax_with_orb.py structures.extxyz --fmax 0.02 --out relaxed.ex
 
 ## API
 
-### `relax(atoms_list, predict, *, fmax=0.05, steps=500, relax_cell=True, device=None, batch_size=None, maxstep=0.2, memory=100, alpha=70.0, damping=1.0, callback=None)`
+### `relax(atoms_list, predict, *, fmax=0.05, steps=500, relax_cell=True, device=None, batch_size=None, maxstep=0.2, memory=100, alpha=10.0, damping=1.0, callback=None)`
 
 | Argument | Meaning |
 |---|---|
@@ -67,7 +69,8 @@ python examples/relax_with_orb.py structures.extxyz --fmax 0.02 --out relaxed.ex
 | `relax_cell` | `True`: positions and cell at zero pressure. `False`: positions only |
 | `device` | where the optimizer runs (default `cuda` if available) |
 | `batch_size` | structures per batch (default: all at once); batches are processed one after another |
-| `maxstep`, `memory`, `alpha`, `damping` | as in `ase.optimize.LBFGS`, same defaults |
+| `maxstep`, `memory`, `damping` | as in `ase.optimize.LBFGS`, same defaults (0.2 A, 100, 1) |
+| `alpha` | initial inverse Hessian is 1/`alpha` (eV/A^2). Default 10; ASE's default is 70 |
 | `callback` | `callback(step, active, energies)` after each evaluation: indices of the structures still running and their energies |
 
 Returns one `RelaxResult` per structure, in input order:
@@ -123,13 +126,35 @@ being relaxed. The optimizer state is kept in float64.
 Structures are passed to `predict` as `ase.Atoms`, so graph construction is whatever the
 potential's own batching does (for ORB, `adapter.from_ase_atoms_list`).
 
+## Choosing alpha
+
+`alpha` sets the initial inverse Hessian 1/alpha, i.e. how large the first steps are before
+L-BFGS has learned the curvature (every step is still capped at `maxstep`). The default here is
+`alpha=10`; ASE uses 70. In an earlier test (455 corrupted MP-20 structures relaxed with ORB v3 on
+the GPU, `maxstep=0.2`), a smaller alpha made typical structures converge in fewer steps, but a few
+more structures ended in higher-energy local minima:
+
+| | alpha = 70 (ASE) | alpha = 10 (default here) |
+|---|---|---|
+| converged after 30 steps (energy change < 1e-3 eV/atom) | 84% | 91% |
+| converged after 50 steps | 99% | 99.6% |
+| median energy above hull after 20 steps (eV/atom) | 0.015 | 0.009 |
+| mean energy above hull after 300 steps (eV/atom) | 0.015 | 0.028 |
+| energy above hull > 0.1 eV/atom after 300 steps | 1.3% | 3.3% |
+
+Each step costs the same, so the speed difference is the number of steps. Use `alpha=70` to
+reproduce ASE's defaults exactly, or if fewer high-energy end points matter more than speed.
+Do not lower `maxstep` to make relaxations "safer": with `maxstep=0.05` the same structures needed
+many more steps.
+
 ## Tests
 
 `tests/test_against_ase.py` compares `relax` with `ase.optimize.LBFGS` using ASE's EMT potential
 on the CPU (five strained, sheared and rattled metal cells of 4 to 32 atoms, relaxed together):
 
-- positions and cell (`FrechetCellFilter`) and positions only: the same number of steps for
-  every structure, final energies equal to 1e-8 eV, positions and cell to 1e-6 A;
+- positions and cell (`FrechetCellFilter`) and positions only, both with the default alpha (10,
+  against ASE run with `alpha=10`) and with `alpha=70` (ASE's defaults): the same number of steps
+  for every structure, final energies equal to 1e-8 eV, positions and cell to 1e-6 A;
 - relaxing all structures in one batch or one at a time gives the same results;
 - the step limit, the callback, and that the inputs are left unchanged.
 
@@ -143,7 +168,9 @@ python -m pytest tests          # or, without pytest: python tests/test_against_
 (precision `float32-high`): 512 MP-20 test structures (5,232 atoms) with a random symmetric strain
 (standard deviation 3%) and 0.1 A rattle, relaxed with positions and cell to fmax = 0.02 eV/A
 (at most 500 steps). Reference: `ase.optimize.LBFGS(FrechetCellFilter(atoms))` with
-`ORBCalculator`, one structure at a time, on the first 64 structures.
+`ORBCalculator`, one structure at a time, on the first 64 structures. These numbers were measured
+with `alpha=70` for both methods (the default before it was changed to 10); use
+`--alpha` to choose.
 
 | Method | Structures per second | Speed-up |
 |---|---|---|

@@ -25,6 +25,7 @@ def main():
     ap.add_argument("--model", default="orb_v3_conservative_inf_mpa")
     ap.add_argument("--weights")
     ap.add_argument("--fmax", type=float, default=0.02)
+    ap.add_argument("--alpha", type=float, default=10.0, help="L-BFGS alpha for both methods (ASE default: 70)")
     ap.add_argument("--steps", type=int, default=500)
     ap.add_argument("--batch-sizes", type=int, nargs="+", default=[32, 128, 512])
     args = ap.parse_args()
@@ -40,14 +41,14 @@ def main():
     calc = ORBCalculator(model, adapter, device="cuda")
     predict = orb_predict(calc)
     atoms_list = read(args.structures, index=f":{args.n}")
-    print(f"{len(atoms_list)} structures, {sum(map(len, atoms_list))} atoms; {torch.cuda.get_device_name()}")
+    print(f"{len(atoms_list)} structures, {sum(map(len, atoms_list))} atoms; {torch.cuda.get_device_name()}; alpha {args.alpha}")
 
     relax(atoms_list[:8], predict, fmax=args.fmax, steps=5)           # warm-up
     timings = {}
     for bs in args.batch_sizes:
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        results = relax(atoms_list, predict, fmax=args.fmax, steps=args.steps, batch_size=bs)
+        results = relax(atoms_list, predict, fmax=args.fmax, steps=args.steps, batch_size=bs, alpha=args.alpha)
         torch.cuda.synchronize()
         dt = time.perf_counter() - t0
         steps = np.array([r.steps for r in results])
@@ -63,7 +64,7 @@ def main():
     for atoms in atoms_list[:args.ase_n]:
         a = atoms.copy()
         a.calc = calc
-        opt = LBFGS(FrechetCellFilter(a), logfile=None)
+        opt = LBFGS(FrechetCellFilter(a), alpha=args.alpha, logfile=None)
         opt.run(fmax=args.fmax, steps=args.steps)
         ref_e.append(a.get_potential_energy() / len(a))
         ref_steps.append(opt.nsteps)
