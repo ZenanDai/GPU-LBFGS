@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpu-lbfgs"
+version = "0.1.0"
+description = "Batched L-BFGS structure relaxation on the GPU, equivalent to ase.optimize.LBFGS"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy", "torch", "ase>=3.23"]
+
+[project.optional-dependencies]
+orb = ["orb-models"]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
