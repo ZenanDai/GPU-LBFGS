@@ -137,6 +137,26 @@ on the CPU (five strained, sheared and rattled metal cells of 4 to 32 atoms, rel
 python -m pytest tests          # or, without pytest: python tests/test_against_ase.py
 ```
 
+## Benchmark
+
+`examples/benchmark_orb.py` on one NVIDIA A100 80GB PCIe with `orb_v3_conservative_inf_mpa`
+(precision `float32-high`): 512 MP-20 test structures (5,232 atoms) with a random symmetric strain
+(standard deviation 3%) and 0.1 A rattle, relaxed with positions and cell to fmax = 0.02 eV/A
+(at most 500 steps). Reference: `ase.optimize.LBFGS(FrechetCellFilter(atoms))` with
+`ORBCalculator`, one structure at a time, on the first 64 structures.
+
+| Method | Structures per second | Speed-up |
+|---|---|---|
+| ASE L-BFGS, one structure at a time | 1.14 | 1x |
+| gpu_lbfgs, batch_size 32 | 7.35 | 6.4x |
+| gpu_lbfgs, batch_size 128 | 20.4 | 17.9x |
+| gpu_lbfgs, batch_size 512 | 35.0 | 30.8x |
+
+All 512 structures converged (38.8 steps on average). Final energies of the 64 structures relaxed
+both ways: median difference 0.08 meV/atom, largest 0.66 meV/atom. ORB on the GPU is not
+bit-reproducible, so the two runs follow slightly different trajectories and usually end after a
+different number of steps; with a deterministic potential they are identical (see Tests).
+
 ## Notes
 
 - Zero external pressure only; the full cell is relaxed (no constraints or masks).
