@@ -130,7 +130,7 @@ potential's own batching does (for ORB, `adapter.from_ase_atoms_list`).
 
 `alpha` sets the initial inverse Hessian 1/alpha, i.e. how large the first steps are before
 L-BFGS has learned the curvature (every step is still capped at `maxstep`). The default here is
-`alpha=10`; ASE uses 70. In an earlier test (455 corrupted MP-20 structures relaxed with ORB v3 on
+`alpha=10`; ASE uses 70. In an earlier test (455 randomly perturbed MP-20 structures relaxed with ORB v3 on
 the GPU, `maxstep=0.2`), a smaller alpha made typical structures converge in fewer steps, but a few
 more structures ended in higher-energy local minima:
 
